@@ -14,6 +14,10 @@ On load it shows the weather for **your current location** automatically
   **📍 My location** button re-detects your location any time.
 - 🌡️ Current temperature, weather description & icon, plus a **Daytime /
   Nighttime** chip
+- 😊 **Animated weather characters** — the weather icon is a cute animated
+  inline-SVG character: a Happy Sun by day, a Happy Moon at night, a smiling
+  cloud for rain/snow/fog, and a flashing bolt for thunderstorms (pure CSS
+  motion, no external images)
 - 🌧️ **Rain prediction** — today's rain chance % in the forecast, and a
   **Rain now (mm)** detail card for current precipitation
 - 📊 Detail cards: feels-like, humidity, wind speed, pressure, rain now
