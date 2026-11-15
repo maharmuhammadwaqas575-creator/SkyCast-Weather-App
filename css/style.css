@@ -280,7 +280,8 @@ body.fx-storm .fx-storm {
   to   { opacity: 1; transform: translateY(0); }
 }
 .weather-main { display: flex; align-items: center; gap: 1.25rem; margin-bottom: 1.5rem; }
-.weather-icon { font-size: 4rem; line-height: 1; }
+.weather-icon { line-height: 1; }
+.weather-icon svg { width: 104px; height: 104px; display: block; }
 .weather-info h2 { font-size: 1.6rem; }
 .weather-desc { color: var(--text-soft); text-transform: capitalize; }
 .day-night {
@@ -349,9 +350,62 @@ body.fx-storm .fx-storm {
   text-align: center;
 }
 .day-label { font-size: 0.85rem; font-weight: 700; }
-.day-icon { font-size: 1.8rem; line-height: 1.4; }
+.day-icon { line-height: 1; }
+.day-icon svg { width: 46px; height: 46px; display: block; margin: 0 auto; }
 .day-temp { font-size: 0.95rem; font-weight: 700; }
 .day-rain { font-size: 0.8rem; color: var(--text-soft); }
+
+/* ---------- Animated weather characters (inline SVG) ---------- */
+/* The SVGs come from js/app.js (ICONS map). Each character has a happy face
+   and moves with pure CSS keyframes — no external images or libraries. */
+.wx-bob   { animation: wx-bob 3.2s ease-in-out infinite; }
+.wx-float { animation: wx-float 4.5s ease-in-out infinite; }
+.wx-sway  { transform-box: fill-box; transform-origin: 50% 0%; animation: wx-sway 4s ease-in-out infinite; }
+.wx-rays  { transform-box: fill-box; transform-origin: center; animation: wx-spin 14s linear infinite; }
+.wx-rays-sm { transform-box: fill-box; transform-origin: center; animation: wx-spin 18s linear infinite; }
+.wx-drift { animation: wx-drift 5s ease-in-out infinite alternate; }
+.wx-twinkle { animation: wx-twinkle 1.8s ease-in-out infinite alternate; }
+.wx-drop  { animation: wx-drop 1.3s linear infinite; }
+.wx-flake { animation: wx-flake 2.2s linear infinite; }
+.wx-bolt  { animation: wx-bolt 2.6s linear infinite; }
+.wx-fogline { animation: wx-fogdrift 6s ease-in-out infinite alternate; }
+
+@keyframes wx-bob   { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+@keyframes wx-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+@keyframes wx-sway  { 0%, 100% { transform: rotate(-2.5deg); } 50% { transform: rotate(2.5deg); } }
+@keyframes wx-spin  { to { transform: rotate(360deg); } }
+@keyframes wx-drift { from { transform: translateX(-3px); } to { transform: translateX(3px); } }
+@keyframes wx-twinkle { from { opacity: 0.25; } to { opacity: 1; } }
+@keyframes wx-drop {
+  0%   { transform: translateY(0); opacity: 0; }
+  25%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateY(10px); opacity: 0; }
+}
+@keyframes wx-flake {
+  0%   { transform: translateY(0) rotate(0deg); opacity: 0; }
+  20%  { opacity: 1; }
+  85%  { opacity: 1; }
+  100% { transform: translateY(11px) rotate(40deg); opacity: 0; }
+}
+@keyframes wx-bolt {
+  0%, 78%, 84%, 100% { opacity: 0.15; }
+  80%, 82% { opacity: 1; }
+}
+@keyframes wx-fogdrift { from { transform: translateX(-4px); } to { transform: translateX(4px); } }
+
+/* Forecast-strip icons: same characters, calmer motion at small size. */
+.day-icon .wx-rays, .day-icon .wx-rays-sm { animation-duration: 24s; }
+.day-icon .wx-bob, .day-icon .wx-float { animation-duration: 6s; }
+.day-icon .wx-drop { animation-duration: 2s; }
+.day-icon .wx-flake { animation-duration: 3s; }
+.day-icon .wx-bolt { animation-duration: 3.4s; }
+
+/* Respect users who prefer no motion. */
+@media (prefers-reduced-motion: reduce) {
+  .wx-bob, .wx-float, .wx-sway, .wx-rays, .wx-rays-sm, .wx-drift,
+  .wx-twinkle, .wx-drop, .wx-flake, .wx-bolt, .wx-fogline { animation: none; }
+}
 
 /* ---------- Footer ---------- */
 .app-footer { text-align: center; margin-top: 2rem; color: var(--text-soft); font-size: 0.85rem; }
@@ -367,7 +421,7 @@ body.fx-storm .fx-storm {
 @media (min-width: 600px) {
   .page { padding-top: 2rem; }
   .detail-grid { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
-  .weather-icon { font-size: 5rem; }
+  .weather-icon svg { width: 128px; height: 128px; }
 }
 
 @media (max-width: 420px) {
