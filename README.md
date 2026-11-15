@@ -3,7 +3,7 @@
 A responsive weather app built with **HTML5, CSS3 and vanilla JavaScript (ES6+)**.
 On load it shows the weather for **your current location** automatically
 (Lahore if location is unavailable) — or type any city name and see its
-**live current weather**, 7-day forecast and a full month view.
+**live current weather** and a 7-day forecast.
 
 ## Features
 
@@ -18,11 +18,6 @@ On load it shows the weather for **your current location** automatically
   **Rain now (mm)** detail card for current precipitation
 - 📊 Detail cards: feels-like, humidity, wind speed, pressure, rain now
 - 📅 **7-day forecast** — day name, icon, high/low temperature, rain chance %
-- 🗓️ **Month view** — Week/Month toggle; the Month view shows the whole
-  current month as a calendar grid with an icon + high/low for each day.
-  Honest limit: Open-Meteo's **free forecast only covers 16 days ahead**,
-  so days beyond that window show "—" with a note — no weather is invented;
-  they appear as the days come closer.
 - 🌞🌙 **Day/night mode** — the page background switches automatically
   between a bright day sky and a dark starry night sky, using the API's
   `is_day` flag (sunrise/sunset as backup)
@@ -45,7 +40,7 @@ On load it shows the weather for **your current location** automatically
 - Forecast: `https://api.open-meteo.com/v1/forecast` — one call fetches the
   current weather (`temperature_2m`, `relative_humidity_2m`,
   `apparent_temperature`, `weather_code`, `pressure_msl`, `wind_speed_10m`,
-  `precipitation`, `is_day`) **and** a 16-day daily forecast (`weather_code`,
+  `precipitation`, `is_day`) **and** a 7-day daily forecast (`weather_code`,
   `temperature_2m_max`, `temperature_2m_min`, `precipitation_probability_max`,
   `sunrise`, `sunset`) with `timezone=auto`
 - Reverse geocoding (auto-location): OpenStreetMap Nominatim
@@ -88,10 +83,10 @@ weather-app/
 ├── index.html      # Semantic HTML structure
 ├── css/
 │   └── style.css   # Layout, cards, responsive design, day/night themes,
-│                   # rain / lightning / stars effects, forecast & calendar
+│                   # rain / lightning / stars effects, forecast
 ├── js/
 │   └── app.js      # Events, geolocation, fetch/async-await, DOM updates,
-│                   # 7-day + month forecast rendering
+│                   # 7-day forecast rendering
 ├── assets/         # (optional images or local icons)
 ├── demo-cheat-sheet.md  # 3-minute demo script (Roman Urdu)
 └── README.md
@@ -109,7 +104,7 @@ weather-app/
 - JSON parsing & optional/missing properties (`??`)
 - Arrays & `localStorage` for recent searches
 - **Geolocation API** (`navigator.geolocation`) with timeout & fallback
-- **Date handling** for the 7-day strip and the month calendar grid
+- **Date handling** for the 7-day strip
 
 ## Screenshots (for submission)
 

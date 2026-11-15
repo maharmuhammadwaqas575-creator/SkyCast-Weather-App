@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="SkyCast — live weather for your current location or any city in the world, with 7-day and monthly forecasts." />
+  <meta name="description" content="SkyCast — live weather for your current location or any city in the world, with a 7-day forecast." />
   <title>SkyCast — Weather App</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
@@ -98,15 +98,9 @@
 
       <section id="forecastSection" class="forecast-section" hidden aria-label="Forecast">
         <div class="forecast-head">
-          <h2 id="forecastTitle">7-day forecast</h2>
-          <div class="view-toggle" role="group" aria-label="Forecast view">
-            <button type="button" id="weekBtn" class="view-btn active" aria-pressed="true">Week</button>
-            <button type="button" id="monthBtn" class="view-btn" aria-pressed="false">Month</button>
-          </div>
+          <h2>7-day forecast</h2>
         </div>
         <div id="weekView" class="week-view"></div>
-        <div id="monthView" class="month-view" hidden></div>
-        <p id="forecastNote" class="forecast-note" hidden>Free forecast covers 16 days ahead — days marked “—” will appear as they come closer.</p>
       </section>
     </main>
 
