@@ -2,14 +2,12 @@
    API: Open-Meteo (free, no API key needed)
    - Geocoding: https://geocoding-api.open-meteo.com/v1/search?name={city}
    - Forecast : https://api.open-meteo.com/v1/forecast?latitude=..&longitude=..
-     (current weather + 16-day daily forecast in ONE call)
+     (current weather + 7-day daily forecast in ONE call)
    - Fallback geocoding: OpenStreetMap Nominatim (if Open-Meteo geocoding is unreachable)
    - Reverse geocoding (auto-location): Nominatim reverse
 
    Auto-location: on load the app asks the browser for the device location.
    If it is denied, unavailable or times out, Lahore is loaded instead.
-   Open-Meteo's free forecast only covers 16 days ahead, so the Month view
-   honestly shows "—" for days beyond that window — no weather is invented.
 */
 
 // ---------- DOM references (const — never reassigned) ----------
@@ -26,23 +24,17 @@ const recentList     = document.getElementById("recentList");
 const celsiusBtn     = document.getElementById("celsiusBtn");
 const fahrenheitBtn  = document.getElementById("fahrenheitBtn");
 const forecastSection = document.getElementById("forecastSection");
-const forecastTitle  = document.getElementById("forecastTitle");
-const weekBtn        = document.getElementById("weekBtn");
-const monthBtn       = document.getElementById("monthBtn");
 const weekView       = document.getElementById("weekView");
-const monthView      = document.getElementById("monthView");
-const forecastNote   = document.getElementById("forecastNote");
 
 // ---------- Constants ----------
 const LAHORE = { name: "Lahore", country: "Pakistan", latitude: 31.558, longitude: 74.35071 };
-const FORECAST_DAYS = 16; // Open-Meteo free limit — do not raise and invent data
+const FORECAST_DAYS = 7; // days shown in the 7-day forecast strip
 
 // ---------- State (let — changes over time) ----------
 let unit = "celsius";          // "celsius" | "fahrenheit"
 let lastCity = null;           // { name, country, latitude, longitude }
 let lastData = null;           // { place, data } — last full forecast, for re-renders
 let recentCities = [];         // recent search names
-let forecastMode = "week";     // "week" | "month"
 let retryAction = () => handleSearch(); // what the Try again button re-runs
 
 // ---------- Small DOM helper ----------
@@ -202,76 +194,13 @@ function renderWeek(daily) {
   }
 }
 
-function renderMonth(daily) {
-  monthView.innerHTML = "";
-
-  // "Today" is the first forecast day (dates are in the place's timezone).
-  const firstDate = daily.time[0];
-  const parts = firstDate.split("-").map(Number);
-  const year = parts[0];
-  const month = parts[1]; // 1-based
-  const todayDay = parts[2];
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const firstWeekday = new Date(year, month - 1, 1).getDay(); // 0 = Sunday
-
-  const byDate = {};
-  daily.time.forEach((d, i) => { byDate[d] = i; });
-
-  const header = el("div", "cal-head");
-  ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].forEach((d) => {
-    header.appendChild(el("span", "", d));
-  });
-  monthView.appendChild(header);
-
-  const grid = el("div", "cal-grid");
-  for (let i = 0; i < firstWeekday; i++) {
-    grid.appendChild(el("div", "cal-cell empty"));
-  }
-  for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-    const cell = el("div", "cal-cell");
-    cell.appendChild(el("span", "cal-num", String(d)));
-    if (d < todayDay) {
-      cell.classList.add("past"); // day already gone — nothing to show
-    } else if (dateStr in byDate) {
-      const i = byDate[dateStr];
-      const info = describeWeather(daily.weather_code[i]);
-      cell.appendChild(el("span", "cal-icon", info.icon));
-      cell.appendChild(el("span", "cal-temp", `${formatTemp(daily.temperature_2m_max[i])}° / ${formatTemp(daily.temperature_2m_min[i])}°`));
-      cell.appendChild(el("span", "cal-rain", rainChanceText(daily, i)));
-      if (d === todayDay) cell.classList.add("today");
-    } else {
-      // Beyond the free 16-day forecast window — show "—", never invented data.
-      cell.classList.add("beyond");
-      cell.appendChild(el("span", "cal-na", "—"));
-    }
-    grid.appendChild(cell);
-  }
-  monthView.appendChild(grid);
-}
-
 function renderForecast() {
   if (!lastData || !lastData.data.daily || !lastData.data.daily.time) {
     forecastSection.hidden = true;
     return;
   }
-  const daily = lastData.data.daily;
-  renderWeek(daily);
-  renderMonth(daily);
-  weekView.hidden = forecastMode !== "week";
-  monthView.hidden = forecastMode !== "month";
-  forecastNote.hidden = forecastMode !== "month";
-  forecastTitle.textContent = forecastMode === "week" ? "7-day forecast" : "This month";
+  renderWeek(lastData.data.daily);
   forecastSection.hidden = false;
-}
-
-function setForecastMode(mode) {
-  forecastMode = mode;
-  weekBtn.classList.toggle("active", mode === "week");
-  monthBtn.classList.toggle("active", mode === "month");
-  weekBtn.setAttribute("aria-pressed", mode === "week");
-  monthBtn.setAttribute("aria-pressed", mode === "month");
-  renderForecast();
 }
 
 // ---------- Render weather data into the DOM ----------
@@ -363,7 +292,7 @@ async function findCity(query) {
   }
 }
 
-// One call: current weather + 16-day daily forecast (rain chance included).
+// One call: current weather + 7-day daily forecast (rain chance included).
 async function fetchForecast(latitude, longitude) {
   const params = new URLSearchParams({
     latitude: latitude,
@@ -522,8 +451,6 @@ locateBtn.addEventListener("click", () => {
 
 celsiusBtn.addEventListener("click", () => setUnit("celsius"));
 fahrenheitBtn.addEventListener("click", () => setUnit("fahrenheit"));
-weekBtn.addEventListener("click", () => setForecastMode("week"));
-monthBtn.addEventListener("click", () => setForecastMode("month"));
 
 // ---------- Init ----------
 loadRecent();
