@@ -3,11 +3,16 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="A simple responsive weather app — search any city and see live weather." />
+  <meta name="description" content="SkyCast — live weather for your current location or any city in the world, with 7-day and monthly forecasts." />
   <title>SkyCast — Weather App</title>
   <link rel="stylesheet" href="css/style.css" />
 </head>
 <body>
+  <!-- Pure-CSS weather effects (rain, lightning, stars). Toggled by body classes in js/app.js -->
+  <div id="fxStars" class="fx-layer fx-stars" aria-hidden="true"></div>
+  <div id="fxRain" class="fx-layer fx-rain" aria-hidden="true"></div>
+  <div id="fxStorm" class="fx-layer fx-storm" aria-hidden="true"></div>
+
   <div class="page">
     <header class="app-header">
       <div class="brand">
@@ -35,7 +40,9 @@
             maxlength="80"
           />
           <button type="submit" id="searchBtn">Search</button>
+          <button type="button" id="locateBtn" title="Show weather for my current location">📍 My location</button>
         </form>
+        <p id="locationNote" class="location-note" hidden></p>
       </section>
 
       <section id="recentSection" class="recent-section" hidden aria-label="Recent searches">
@@ -50,18 +57,13 @@
 
       <div id="errorBox" class="error-box" hidden role="alert"></div>
 
-      <section id="welcome" class="welcome-card" aria-label="Welcome">
-        <p class="welcome-icon" aria-hidden="true">🌍</p>
-        <h2>Welcome!</h2>
-        <p>Type a city name above and press <strong>Search</strong> (or hit Enter) to see its live weather.</p>
-      </section>
-
       <section id="weatherCard" class="weather-card" hidden aria-label="Current weather" aria-live="polite">
         <div class="weather-main">
           <div class="weather-icon" id="weatherIcon" aria-hidden="true">⛅</div>
           <div class="weather-info">
             <h2 id="cityName">—</h2>
             <p id="weatherDesc" class="weather-desc">—</p>
+            <p id="dayNight" class="day-night" hidden></p>
             <p class="temp"><span id="temperature">—</span><span id="tempUnit">°C</span></p>
           </div>
         </div>
@@ -86,7 +88,25 @@
             <p class="detail-label">Pressure</p>
             <p class="detail-value"><span id="pressure">—</span><span class="detail-unit">hPa</span></p>
           </div>
+          <div class="detail-card">
+            <span class="detail-icon" aria-hidden="true">🌧️</span>
+            <p class="detail-label">Rain now</p>
+            <p class="detail-value"><span id="precipitation">—</span><span class="detail-unit">mm</span></p>
+          </div>
         </div>
+      </section>
+
+      <section id="forecastSection" class="forecast-section" hidden aria-label="Forecast">
+        <div class="forecast-head">
+          <h2 id="forecastTitle">7-day forecast</h2>
+          <div class="view-toggle" role="group" aria-label="Forecast view">
+            <button type="button" id="weekBtn" class="view-btn active" aria-pressed="true">Week</button>
+            <button type="button" id="monthBtn" class="view-btn" aria-pressed="false">Month</button>
+          </div>
+        </div>
+        <div id="weekView" class="week-view"></div>
+        <div id="monthView" class="month-view" hidden></div>
+        <p id="forecastNote" class="forecast-note" hidden>Free forecast covers 16 days ahead — days marked “—” will appear as they come closer.</p>
       </section>
     </main>
 
