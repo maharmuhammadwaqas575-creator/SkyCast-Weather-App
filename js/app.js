@@ -8,6 +8,10 @@
 
    Auto-location: on load the app asks the browser for the device location.
    If it is denied, unavailable or times out, Lahore is loaded instead.
+
+   Icons: animated inline-SVG weather characters (Happy Sun / Happy Moon /
+   peeking sun-moon + cloud / smiling cloud / rain / snow / storm) with
+   pure-CSS keyframe animations — no external images or libraries.
 */
 
 // ---------- DOM references (const — never reassigned) ----------
@@ -45,18 +49,203 @@ function el(tag, className, text) {
   return node;
 }
 
-// ---------- WMO weather-code → description, icon, theme ----------
-function describeWeather(code) {
-  if (code === 0)  return { text: "Clear sky",        icon: "☀️", theme: "theme-clear" };
-  if (code === 1)  return { text: "Mainly clear",     icon: "🌤️", theme: "theme-clear" };
-  if (code === 2)  return { text: "Partly cloudy",    icon: "⛅", theme: "theme-cloudy" };
-  if (code === 3)  return { text: "Overcast",         icon: "☁️", theme: "theme-cloudy" };
-  if (code === 45 || code === 48) return { text: "Foggy", icon: "🌫️", theme: "theme-fog" };
-  if ([51, 53, 55, 56, 57].includes(code)) return { text: "Drizzle", icon: "🌦️", theme: "theme-rain" };
-  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { text: "Rain", icon: "🌧️", theme: "theme-rain" };
-  if ([71, 73, 75, 77, 85, 86].includes(code)) return { text: "Snow", icon: "🌨️", theme: "theme-snow" };
-  if ([95, 96, 99].includes(code)) return { text: "Thunderstorm", icon: "⛈️", theme: "theme-storm" };
-  return { text: "Unknown", icon: "🌡️", theme: "" };
+// ---------- WMO weather-code → description, icon key, theme ----------
+// The icon is a key into ICONS below (an animated inline-SVG character).
+// Codes 0–2 switch to their night variant (moon) when isDay is false;
+// the 7-day strip always uses the day variant (it shows daytime weather).
+function describeWeather(code, isDay = true) {
+  if (code === 0)  return { text: "Clear sky",        icon: isDay ? "sun" : "moon", theme: "theme-clear" };
+  if (code === 1)  return { text: "Mainly clear",     icon: isDay ? "sunCloud" : "moonCloud", theme: "theme-clear" };
+  if (code === 2)  return { text: "Partly cloudy",    icon: isDay ? "sunCloud" : "moonCloud", theme: "theme-cloudy" };
+  if (code === 3)  return { text: "Overcast",         icon: "cloud", theme: "theme-cloudy" };
+  if (code === 45 || code === 48) return { text: "Foggy", icon: "fog", theme: "theme-fog" };
+  if ([51, 53, 55, 56, 57].includes(code)) return { text: "Drizzle", icon: "rain", theme: "theme-rain" };
+  if ([61, 63, 65, 66, 67, 80, 81, 82].includes(code)) return { text: "Rain", icon: "rain", theme: "theme-rain" };
+  if ([71, 73, 75, 77, 85, 86].includes(code)) return { text: "Snow", icon: "snow", theme: "theme-snow" };
+  if ([95, 96, 99].includes(code)) return { text: "Thunderstorm", icon: "storm", theme: "theme-storm" };
+  return { text: "Unknown", icon: "cloud", theme: "" };
+}
+
+// ---------- Animated weather characters (inline SVG, pure CSS motion) ----------
+// Every character has a happy face. Animations (ray spin, bob, sway, twinkle,
+// rainfall, snowfall, lightning flash, cloud drift) live in css/style.css.
+
+// A smiling cloud, built from overlapping circles + a rounded base.
+function cloudShape(fill) {
+  return `<g fill="${fill}">
+    <circle cx="34" cy="60" r="17"/>
+    <circle cx="54" cy="48" r="21"/>
+    <circle cx="72" cy="62" r="15"/>
+    <rect x="20" y="56" width="62" height="20" rx="10"/>
+  </g>`;
+}
+
+function cloudFace(color) {
+  return `<circle cx="46" cy="58" r="3" fill="${color}"/>
+  <circle cx="60" cy="58" r="3" fill="${color}"/>
+  <path d="M46 66 Q53 72 60 66" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="38" cy="64" r="3.5" fill="#FF9E9E" opacity="0.6"/>
+  <circle cx="68" cy="64" r="3.5" fill="#FF9E9E" opacity="0.6"/>`;
+}
+
+// The small smiling cloud that the sun / moon peeks out from behind.
+function smallCloud() {
+  return `<g class="wx-drift">
+    <g fill="#FFFFFF">
+      <circle cx="46" cy="68" r="11"/>
+      <circle cx="60" cy="60" r="14"/>
+      <circle cx="73" cy="68" r="10"/>
+      <rect x="38" y="62" width="44" height="14" rx="7"/>
+    </g>
+    <circle cx="54" cy="64" r="2.2" fill="#4A5568"/>
+    <circle cx="66" cy="64" r="2.2" fill="#4A5568"/>
+    <path d="M54 70 Q60 75 66 70" fill="none" stroke="#4A5568" stroke-width="2.4" stroke-linecap="round"/>
+  </g>`;
+}
+
+const ICONS = {
+  // Happy Sun — smiling face, rotating rays, gentle bobbing.
+  sun: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-sun">
+    <g class="wx-bob">
+      <g class="wx-rays" stroke="#FFB703" stroke-width="5" stroke-linecap="round">
+        <line x1="50" y1="6" x2="50" y2="16"/>
+        <line x1="50" y1="84" x2="50" y2="94"/>
+        <line x1="6" y1="50" x2="16" y2="50"/>
+        <line x1="84" y1="50" x2="94" y2="50"/>
+        <line x1="19" y1="19" x2="26" y2="26"/>
+        <line x1="74" y1="74" x2="81" y2="81"/>
+        <line x1="19" y1="81" x2="26" y2="74"/>
+        <line x1="74" y1="26" x2="81" y2="19"/>
+      </g>
+      <circle cx="50" cy="50" r="28" fill="#FFD93D" stroke="#FFB703" stroke-width="2"/>
+      <circle cx="41" cy="46" r="3.2" fill="#4A3728"/>
+      <circle cx="59" cy="46" r="3.2" fill="#4A3728"/>
+      <path d="M41 56 Q50 64 59 56" fill="none" stroke="#4A3728" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="34" cy="54" r="3.5" fill="#FF9E9E" opacity="0.65"/>
+      <circle cx="66" cy="54" r="3.5" fill="#FF9E9E" opacity="0.65"/>
+    </g>
+  </svg>`,
+
+  // Happy Moon — smiling crescent (evenodd cut-out), gentle sway, twinkling stars.
+  moon: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-moon">
+    <g class="wx-sway">
+      <path fill-rule="evenodd" fill="#FFE89A" d="M48 16 A36 36 0 1 0 48 88 A36 36 0 1 0 48 16 Z M66 10 A30 30 0 1 0 66 70 A30 30 0 1 0 66 10 Z"/>
+      <circle cx="26" cy="53" r="2.6" fill="#4A3728"/>
+      <circle cx="35" cy="52" r="2.6" fill="#4A3728"/>
+      <path d="M25 60 Q30 65 36 59" fill="none" stroke="#4A3728" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="20" cy="58" r="3" fill="#FF9E9E" opacity="0.6"/>
+      <path class="wx-twinkle" fill="#FFF3B0" d="M72 20 l1.8 4.6 4.6 1.8 -4.6 1.8 -1.8 4.6 -1.8-4.6 -4.6-1.8 4.6-1.8 Z"/>
+      <path class="wx-twinkle" style="animation-delay:0.9s" fill="#FFF3B0" d="M84 56 l1.4 3.6 3.6 1.4 -3.6 1.4 -1.4 3.6 -1.4-3.6 -3.6-1.4 3.6-1.4 Z"/>
+    </g>
+  </svg>`,
+
+  // Happy Sun peeking from behind a small smiling cloud.
+  sunCloud: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-suncloud">
+    <g class="wx-bob">
+      <g class="wx-rays-sm" stroke="#FFB703" stroke-width="4" stroke-linecap="round">
+        <line x1="36" y1="4" x2="36" y2="11"/>
+        <line x1="36" y1="57" x2="36" y2="64"/>
+        <line x1="6" y1="34" x2="13" y2="34"/>
+        <line x1="59" y1="34" x2="66" y2="34"/>
+        <line x1="15" y1="13" x2="20" y2="18"/>
+        <line x1="52" y1="50" x2="57" y2="55"/>
+        <line x1="15" y1="55" x2="20" y2="50"/>
+        <line x1="52" y1="18" x2="57" y2="13"/>
+      </g>
+      <circle cx="36" cy="34" r="17" fill="#FFD93D"/>
+      <circle cx="30" cy="32" r="2.4" fill="#4A3728"/>
+      <circle cx="42" cy="32" r="2.4" fill="#4A3728"/>
+      <path d="M30 39 Q36 44 42 39" fill="none" stroke="#4A3728" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="25" cy="38" r="2.6" fill="#FF9E9E" opacity="0.65"/>
+      <circle cx="47" cy="38" r="2.6" fill="#FF9E9E" opacity="0.65"/>
+    </g>
+    ${smallCloud()}
+  </svg>`,
+
+  // Happy Moon peeking from behind a small smiling cloud (night variant).
+  moonCloud: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-mooncloud">
+    <g class="wx-sway">
+      <path fill-rule="evenodd" fill="#FFE89A" d="M34 16 A20 20 0 1 0 34 56 A20 20 0 1 0 34 16 Z M44 12 A16 16 0 1 0 44 44 A16 16 0 1 0 44 12 Z"/>
+      <circle cx="21" cy="38" r="1.8" fill="#4A3728"/>
+      <circle cx="29" cy="37" r="1.8" fill="#4A3728"/>
+      <path d="M20 43 Q25 47 30 42" fill="none" stroke="#4A3728" stroke-width="2" stroke-linecap="round"/>
+    </g>
+    ${smallCloud()}
+  </svg>`,
+
+  // Happy Cloud — smiling, slow float.
+  cloud: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-cloud">
+    <g class="wx-float">
+      ${cloudShape("#FFFFFF")}
+      ${cloudFace("#4A5568")}
+    </g>
+  </svg>`,
+
+  // Foggy — happy cloud with drifting fog lines.
+  fog: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-fog">
+    <g class="wx-float">
+      ${cloudShape("#F8FAFC")}
+      ${cloudFace("#4A5568")}
+    </g>
+    <path class="wx-fogline" d="M26 84 q7 -4 14 0 t14 0 14 0" fill="none" stroke="#DCE6F2" stroke-width="3.5" stroke-linecap="round"/>
+    <path class="wx-fogline" style="animation-delay:1.4s" d="M32 92 q7 -4 14 0 t14 0" fill="none" stroke="#CBD8EA" stroke-width="3.5" stroke-linecap="round"/>
+  </svg>`,
+
+  // Rain / Drizzle — happy cloud with animated falling raindrops.
+  rain: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-rain">
+    <g class="wx-float">
+      ${cloudShape("#FFFFFF")}
+      ${cloudFace("#4A5568")}
+    </g>
+    <g fill="#5AB0FF">
+      <path class="wx-drop" d="M36 78 C33 83 33 86 36 88 C39 86 39 83 36 78 Z"/>
+      <path class="wx-drop" style="animation-delay:0.45s" d="M50 80 C47 85 47 88 50 90 C53 88 53 85 50 80 Z"/>
+      <path class="wx-drop" style="animation-delay:0.9s" d="M64 78 C61 83 61 86 64 88 C67 86 67 83 64 78 Z"/>
+    </g>
+  </svg>`,
+
+  // Snow — happy cloud with animated falling snowflakes.
+  snow: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-snow">
+    <g class="wx-float">
+      ${cloudShape("#FFFFFF")}
+      ${cloudFace("#4A5568")}
+    </g>
+    <g stroke="#FFFFFF" stroke-width="2.4" stroke-linecap="round">
+      <g class="wx-flake">
+        <line x1="36" y1="80" x2="36" y2="88"/>
+        <line x1="32.5" y1="82" x2="39.5" y2="86"/>
+        <line x1="39.5" y1="82" x2="32.5" y2="86"/>
+      </g>
+      <g class="wx-flake" style="animation-delay:0.7s">
+        <line x1="50" y1="82" x2="50" y2="90"/>
+        <line x1="46.5" y1="84" x2="53.5" y2="88"/>
+        <line x1="53.5" y1="84" x2="46.5" y2="88"/>
+      </g>
+      <g class="wx-flake" style="animation-delay:1.4s">
+        <line x1="64" y1="80" x2="64" y2="88"/>
+        <line x1="60.5" y1="82" x2="67.5" y2="86"/>
+        <line x1="67.5" y1="82" x2="60.5" y2="86"/>
+      </g>
+    </g>
+  </svg>`,
+
+  // Thunderstorm — brave little face on a dark cloud, flashing lightning bolt.
+  storm: `<svg viewBox="0 0 100 100" aria-hidden="true" class="wx wx-storm">
+    <g class="wx-float">
+      ${cloudShape("#8A9BB0")}
+      <path d="M43 51 L50 53" stroke="#2F3B4C" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M63 51 L56 53" stroke="#2F3B4C" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="46" cy="58" r="3" fill="#2F3B4C"/>
+      <circle cx="60" cy="58" r="3" fill="#2F3B4C"/>
+      <path d="M47 66 Q53 70 59 66" fill="none" stroke="#2F3B4C" stroke-width="3" stroke-linecap="round"/>
+    </g>
+    <polygon class="wx-bolt" points="58,76 47,90 54,90 49,100 65,84 57,84" fill="#FFD93D" stroke="#F4A900" stroke-width="1" stroke-linejoin="round"/>
+  </svg>`,
+};
+
+// Key → animated SVG string (falls back to the plain cloud).
+function weatherIconSVG(key) {
+  return ICONS[key] || ICONS.cloud;
 }
 
 function toFahrenheit(celsius) {
@@ -187,7 +376,9 @@ function renderWeek(daily) {
     const info = describeWeather(daily.weather_code[i]);
     const card = el("div", "day-card");
     card.appendChild(el("p", "day-label", i === 0 ? "Today" : weekdayShort(daily.time[i])));
-    card.appendChild(el("p", "day-icon", info.icon));
+    const iconEl = el("p", "day-icon");
+    iconEl.innerHTML = weatherIconSVG(info.icon);
+    card.appendChild(iconEl);
     card.appendChild(el("p", "day-temp", `${formatTemp(daily.temperature_2m_max[i])}° / ${formatTemp(daily.temperature_2m_min[i])}°`));
     card.appendChild(el("p", "day-rain", rainChanceText(daily, i)));
     weekView.appendChild(card);
@@ -207,13 +398,13 @@ function renderForecast() {
 function renderWeather(place, data) {
   const current = data.current;
   const daily = data.daily;
-  const info = describeWeather(current.weather_code);
   const isDay = getIsDay(current, daily);
+  const info = describeWeather(current.weather_code, isDay);
 
   document.getElementById("cityName").textContent =
     place.country ? `${place.name}, ${place.country}` : place.name;
   document.getElementById("weatherDesc").textContent = info.text;
-  document.getElementById("weatherIcon").textContent = info.icon;
+  document.getElementById("weatherIcon").innerHTML = weatherIconSVG(info.icon);
   const dayNight = document.getElementById("dayNight");
   dayNight.textContent = isDay ? "☀️ Daytime" : "🌙 Nighttime";
   dayNight.hidden = false;
