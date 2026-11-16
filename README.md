@@ -49,7 +49,6 @@ On load it shows the weather for **your current location** automatically
 - ⭐ **Favourite cities** — tap the star next to the city name to pin it; favourites appear as quick chips, tap one to load it (saved in `localStorage`)
 - 🌐 **Urdu / English toggle** — the اردو button in the header switches the main labels; saved in `localStorage`
 - 📈 **Temperature graph** — 7-day high/low line chart drawn on a plain `<canvas>` (no chart library)
-- 🗺️ **Rain radar map** — live radar tiles from RainViewer on a Leaflet map, centred on the current city (hides gracefully if the map library can't load)
 
 The 7-day forecast is still the only forecast view — no month view.
 
