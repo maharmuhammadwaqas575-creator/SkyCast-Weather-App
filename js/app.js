@@ -5,7 +5,6 @@
      (current weather + hourly + 7-day daily forecast in ONE call)
    - Air quality: https://air-quality-api.open-meteo.com/v1/air-quality
      (US AQI + PM2.5, free, no key — section hides if it fails)
-   - Rain radar: Leaflet (CDN) + RainViewer tiles (free, no key)
    - Fallback geocoding: OpenStreetMap Nominatim (if Open-Meteo geocoding is unreachable)
    - Reverse geocoding (auto-location): Nominatim reverse
    - Moon phase: computed in JS from the date (no API needed)
@@ -42,7 +41,6 @@ const hourlyStrip    = document.getElementById("hourlyStrip");
 const extraSection   = document.getElementById("extraSection");
 const graphSection   = document.getElementById("graphSection");
 const tempChartEl    = document.getElementById("tempChart");
-const radarSection   = document.getElementById("radarSection");
 const feelsLikeBigEl = document.getElementById("feelsLikeBig");
 const windDetailEl   = document.getElementById("windDetail");
 const uvValueEl      = document.getElementById("uvValue");
@@ -74,8 +72,6 @@ let favourites = [];           // pinned cities { name, country, latitude, longi
 let lang = "en";               // "en" | "ur" — UI language, saved in localStorage
 try { lang = localStorage.getItem("skycast-lang") || "en"; } catch (e) { /* storage unavailable */ }
 let retryAction = () => handleSearch(); // what the Try again button re-runs
-let radarMap = null;           // Leaflet map (created once, re-centred per city)
-let radarMarker = null;        // marker on the current city
 let lastAQIKey = "";           // "lat,lon" of the last air-quality fetch
 let lastAQITime = 0;           // when it was fetched (skip re-fetch within 10 min)
 
@@ -96,8 +92,6 @@ const I18N = {
     forecastTitle: "7-day forecast",
     extraTitle: "Today's details",
     graphTitle: "7-day temperature graph",
-    radarTitle: "Rain radar",
-    radarNote: "Live rain radar • RainViewer",
     feelsLike: "Feels like",
     humidity: "Humidity",
     windLabel: "Wind speed",
@@ -150,8 +144,6 @@ const I18N = {
     forecastTitle: "7 دن کی پیش گوئی",
     extraTitle: "آج کی تفصیل",
     graphTitle: "7 دن کا درجہ حرارت گراف",
-    radarTitle: "بارش کا ریڈار",
-    radarNote: "لائیو بارش ریڈار • RainViewer",
     feelsLike: "محسوس ہوتا ہے",
     humidity: "نمی",
     windLabel: "ہوا کی رفتار",
@@ -467,7 +459,6 @@ function showError(message, showRetry = false) {
   hourlySection.hidden = true;
   extraSection.hidden = true;
   graphSection.hidden = true;
-  radarSection.hidden = true;
 }
 
 function hideError() {
@@ -627,12 +618,11 @@ function renderWeather(place, data) {
   renderExtras(place, data);
   graphSection.hidden = false;
   drawTempChart(daily);
-  updateRadar(place);
   updateFavButton();
   weatherCard.hidden = false;
 }
 
-// ---------- New features: compass, moon, UV, AQI, tips, hourly, graph, radar ----------
+// ---------- New features: compass, moon, UV, AQI, tips, hourly, graph ----------
 
 // Wind degrees (0–360) → 16-point compass direction, e.g. 315 → "NW".
 function degreesToCompass(deg) {
@@ -862,51 +852,6 @@ function drawTempChart(daily) {
   ctx.textAlign = "center";
   for (let i = 0; i < days; i++) {
     ctx.fillText(i === 0 ? t("today") : weekdayShort(daily.time[i]), x(i), height - 6);
-  }
-}
-
-// ---------- Rain radar (Leaflet + free RainViewer tiles) ----------
-// If Leaflet failed to load (offline / CDN blocked) the section stays hidden.
-async function updateRadar(place) {
-  if (typeof L === "undefined") {
-    radarSection.hidden = true;
-    return;
-  }
-  radarSection.hidden = false;
-  try {
-    if (!radarMap) {
-      radarMap = L.map("radarMap").setView([place.latitude, place.longitude], 9);
-      // Base map from Esri World Street Map (free, no key) — NOT
-      // tile.openstreetmap.org (its volunteer servers 403-block apps) and
-      // NOT CARTO basemaps (they now need an API key — without one they
-      // only serve a 2 KB "API KEY REQUIRED" watermark tile, even with a
-      // 200 status). Esri serves real map tiles with no key.
-      // NOTE the order: Esri wants tile/{z}/{y}/{x}, not {z}/{x}/{y}.
-      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
-        maxZoom: 18,
-        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012',
-      }).addTo(radarMap);
-      // Ask RainViewer for the newest radar frame, then add its tiles.
-      // NOTE: RainViewer gives each frame a "path" (like "/v2/radar/5efb0bcc11ee").
-      // The old timestamp-style URL no longer works (410 Gone), so the path must be used.
-      const rv = await fetchJson("https://api.rainviewer.com/public/weather-maps.json", 2);
-      const past = rv && rv.radar && rv.radar.past;
-      const frame = past && past.length ? past[past.length - 1] : null;
-      if (frame && frame.path) {
-        L.tileLayer(`https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, {
-          opacity: 0.7,
-          attribution: 'Radar &copy; <a href="https://www.rainviewer.com">RainViewer</a>',
-        }).addTo(radarMap);
-      }
-      radarMarker = L.marker([place.latitude, place.longitude]).addTo(radarMap);
-    } else {
-      radarMap.setView([place.latitude, place.longitude], 9);
-      if (radarMarker) radarMarker.setLatLng([place.latitude, place.longitude]);
-    }
-    // The map was hidden until now — tell Leaflet to re-measure its box.
-    setTimeout(() => { if (radarMap) radarMap.invalidateSize(); }, 100);
-  } catch (e) {
-    radarSection.hidden = true; // radar is a bonus — never break the app
   }
 }
 
