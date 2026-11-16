@@ -36,6 +36,23 @@ On load it shows the weather for **your current location** automatically
 - ⚠️ Friendly error messages (empty input, unknown city, no internet, API failure) — failed searches retry automatically (up to 3 times), fall back to a second lookup service, and offer a Try again button
 - 📱 Fully responsive — mobile, tablet & desktop
 
+## What's new (v3 — 16 Nov 2026)
+
+- 🕐 **Hourly forecast** — next 24 hours strip (hour, icon, temperature, rain %)
+- ☀️ **UV index** — current UV + today's max, with a plain Low/Moderate/High/Very High label and advice
+- 🌅 **Sunrise / sunset** — today's times + day length
+- 🧭 **Wind detail** — compass direction (e.g. NW) + gusts
+- 🤒 **Feels-like temperature** — shown big under the current temperature (and in the detail cards as before)
+- 🍃 **Air quality (AQI)** — US AQI + PM2.5 from the free Open-Meteo air-quality API; the card hides itself if the service fails
+- 🌙 **Moon phase** — computed in JavaScript from the date (no API needed), with phase name + emoji
+- 👕 **What to wear** — a simple tip from feels-like temperature, rain chance and UV (jacket? umbrella? sunscreen?)
+- ⭐ **Favourite cities** — tap the star next to the city name to pin it; favourites appear as quick chips, tap one to load it (saved in `localStorage`)
+- 🌐 **Urdu / English toggle** — the اردو button in the header switches the main labels; saved in `localStorage`
+- 📈 **Temperature graph** — 7-day high/low line chart drawn on a plain `<canvas>` (no chart library)
+- 🗺️ **Rain radar map** — live radar tiles from RainViewer on a Leaflet map, centred on the current city (hides gracefully if the map library can't load)
+
+The 7-day forecast is still the only forecast view — no month view.
+
 ## API provider
 
 **Open-Meteo** — free, no API key required:

@@ -6,6 +6,9 @@
   <meta name="description" content="SkyCast — live weather for your current location or any city in the world, with a 7-day forecast." />
   <title>SkyCast — Weather App</title>
   <link rel="stylesheet" href="css/style.css" />
+  <!-- Leaflet (free, CDN) — only for the rain-radar map. If it fails to load,
+       js/app.js hides the radar section, so the app still works fine. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 </head>
 <body>
   <!-- Pure-CSS weather effects (rain, lightning, stars). Toggled by body classes in js/app.js -->
@@ -19,12 +22,15 @@
         <span class="brand-icon" aria-hidden="true">🌤️</span>
         <div>
           <h1>SkyCast</h1>
-          <p class="subtitle">Live weather for any city in the world</p>
+          <p class="subtitle" data-i18n="subtitle">Live weather for any city in the world</p>
         </div>
       </div>
-      <div class="unit-toggle" role="group" aria-label="Temperature unit">
-        <button type="button" id="celsiusBtn" class="unit-btn active" aria-pressed="true">°C</button>
-        <button type="button" id="fahrenheitBtn" class="unit-btn" aria-pressed="false">°F</button>
+      <div class="header-controls">
+        <button type="button" id="langBtn" class="lang-btn" title="Switch language / زبان بدلیں">اردو</button>
+        <div class="unit-toggle" role="group" aria-label="Temperature unit">
+          <button type="button" id="celsiusBtn" class="unit-btn active" aria-pressed="true">°C</button>
+          <button type="button" id="fahrenheitBtn" class="unit-btn" aria-pressed="false">°F</button>
+        </div>
       </div>
     </header>
 
@@ -37,22 +43,28 @@
             id="cityInput"
             name="city"
             placeholder="Enter city name… e.g. Jhang"
+            data-i18n-placeholder="searchPlaceholder"
             maxlength="80"
           />
-          <button type="submit" id="searchBtn">Search</button>
-          <button type="button" id="locateBtn" title="Show weather for my current location">📍 My location</button>
+          <button type="submit" id="searchBtn" data-i18n="search">Search</button>
+          <button type="button" id="locateBtn" title="Show weather for my current location" data-i18n="myLocation">📍 My location</button>
         </form>
         <p id="locationNote" class="location-note" hidden></p>
       </section>
 
       <section id="recentSection" class="recent-section" hidden aria-label="Recent searches">
-        <h2>Recent searches</h2>
+        <h2 data-i18n="recentTitle">Recent searches</h2>
         <ul id="recentList"></ul>
+      </section>
+
+      <section id="favSection" class="recent-section" hidden aria-label="Favourite cities">
+        <h2 data-i18n="favTitle">Favourite cities</h2>
+        <ul id="favList"></ul>
       </section>
 
       <div id="loading" class="loading" hidden role="status" aria-live="polite">
         <span class="spinner" aria-hidden="true"></span>
-        <p>Fetching weather…</p>
+        <p data-i18n="fetching">Fetching weather…</p>
       </div>
 
       <div id="errorBox" class="error-box" hidden role="alert"></div>
@@ -61,54 +73,115 @@
         <div class="weather-main">
           <div class="weather-icon" id="weatherIcon" aria-hidden="true"></div>
           <div class="weather-info">
-            <h2 id="cityName">—</h2>
+            <div class="city-row">
+              <h2 id="cityName">—</h2>
+              <button type="button" id="favBtn" class="fav-btn" title="Save as favourite" aria-label="Save as favourite">☆</button>
+            </div>
             <p id="weatherDesc" class="weather-desc">—</p>
             <p id="dayNight" class="day-night" hidden></p>
             <p class="temp"><span id="temperature">—</span><span id="tempUnit">°C</span></p>
+            <p class="feels-like-line"><span data-i18n="feelsLike">Feels like</span> <span id="feelsLikeBig">—</span><span data-unit>°C</span></p>
           </div>
         </div>
         <div class="detail-grid">
           <div class="detail-card">
             <span class="detail-icon" aria-hidden="true">🤒</span>
-            <p class="detail-label">Feels like</p>
+            <p class="detail-label" data-i18n="feelsLike">Feels like</p>
             <p class="detail-value"><span id="feelsLike">—</span><span class="detail-unit" data-unit>°C</span></p>
           </div>
           <div class="detail-card">
             <span class="detail-icon" aria-hidden="true">💧</span>
-            <p class="detail-label">Humidity</p>
+            <p class="detail-label" data-i18n="humidity">Humidity</p>
             <p class="detail-value"><span id="humidity">—</span><span class="detail-unit">%</span></p>
           </div>
           <div class="detail-card">
             <span class="detail-icon" aria-hidden="true">💨</span>
-            <p class="detail-label">Wind speed</p>
+            <p class="detail-label" data-i18n="windLabel">Wind speed</p>
             <p class="detail-value"><span id="windSpeed">—</span><span class="detail-unit">km/h</span></p>
+            <p class="detail-sub" id="windDetail">—</p>
           </div>
           <div class="detail-card">
             <span class="detail-icon" aria-hidden="true">🧭</span>
-            <p class="detail-label">Pressure</p>
+            <p class="detail-label" data-i18n="pressure">Pressure</p>
             <p class="detail-value"><span id="pressure">—</span><span class="detail-unit">hPa</span></p>
           </div>
           <div class="detail-card">
             <span class="detail-icon" aria-hidden="true">🌧️</span>
-            <p class="detail-label">Rain now</p>
+            <p class="detail-label" data-i18n="rainNow">Rain now</p>
             <p class="detail-value"><span id="precipitation">—</span><span class="detail-unit">mm</span></p>
           </div>
         </div>
       </section>
 
+      <section id="hourlySection" class="hourly-section" hidden aria-label="Hourly forecast">
+        <h2 data-i18n="hourlyTitle">Next 24 hours</h2>
+        <div id="hourlyStrip" class="hourly-strip"></div>
+      </section>
+
       <section id="forecastSection" class="forecast-section" hidden aria-label="Forecast">
         <div class="forecast-head">
-          <h2>7-day forecast</h2>
+          <h2 data-i18n="forecastTitle">7-day forecast</h2>
         </div>
         <div id="weekView" class="week-view"></div>
+      </section>
+
+      <section id="graphSection" class="graph-section" hidden aria-label="Temperature graph">
+        <h2 data-i18n="graphTitle">7-day temperature graph</h2>
+        <canvas id="tempChart" height="180" aria-label="Line chart of daily high and low temperatures"></canvas>
+        <p class="graph-legend"><span class="legend-max"></span> <span data-i18n="legendMax">Daily high</span> &nbsp; <span class="legend-min"></span> <span data-i18n="legendMin">Daily low</span></p>
+      </section>
+
+      <section id="extraSection" class="extra-section" hidden aria-label="Today's details">
+        <h2 data-i18n="extraTitle">Today's details</h2>
+        <div class="extra-grid">
+          <div class="extra-card">
+            <span class="detail-icon" aria-hidden="true">☀️</span>
+            <p class="detail-label" data-i18n="uvLabel">UV index</p>
+            <p class="detail-value"><span id="uvValue">—</span></p>
+            <p class="detail-sub" id="uvLabelText">—</p>
+            <p class="detail-sub"><span data-i18n="maxToday">Max today</span>: <span id="uvMax">—</span></p>
+          </div>
+          <div class="extra-card">
+            <span class="detail-icon" aria-hidden="true">🌅</span>
+            <p class="detail-label" data-i18n="sunLabel">Sunrise &amp; sunset</p>
+            <p class="detail-value">🌅 <span id="sunriseTime">—</span> &nbsp; 🌇 <span id="sunsetTime">—</span></p>
+            <p class="detail-sub"><span data-i18n="dayLength">Day length</span>: <span id="dayLength">—</span></p>
+          </div>
+          <div class="extra-card">
+            <span class="detail-icon" id="moonIcon" aria-hidden="true">🌙</span>
+            <p class="detail-label" data-i18n="moonLabel">Moon phase</p>
+            <p class="detail-value"><span id="moonEmoji">🌙</span> <span id="moonName">—</span></p>
+            <p class="detail-sub" id="moonIllum">—</p>
+          </div>
+          <div class="extra-card" id="aqiCard">
+            <span class="detail-icon" aria-hidden="true">🍃</span>
+            <p class="detail-label" data-i18n="aqiLabel">Air quality</p>
+            <p class="detail-value">AQI <span id="aqiValue">—</span></p>
+            <p class="detail-sub" id="aqiCategory">—</p>
+            <p class="detail-sub" id="aqiPm">—</p>
+          </div>
+          <div class="extra-card extra-wide">
+            <span class="detail-icon" aria-hidden="true">👕</span>
+            <p class="detail-label" data-i18n="clothingLabel">What to wear</p>
+            <p class="detail-value clothing-tip" id="clothingTip">—</p>
+          </div>
+        </div>
+      </section>
+
+      <section id="radarSection" class="radar-section" hidden aria-label="Rain radar">
+        <h2 data-i18n="radarTitle">Rain radar</h2>
+        <div id="radarMap"></div>
+        <p class="radar-note" data-i18n="radarNote">Live rain radar • RainViewer</p>
       </section>
     </main>
 
     <footer class="app-footer">
-      <p>Data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a> • Built with HTML, CSS &amp; JavaScript</p>
+      <p><a href="https://open-meteo.com/" target="_blank" rel="noopener">Weather data by Open-Meteo</a> • Radar by <a href="https://www.rainviewer.com/" target="_blank" rel="noopener">RainViewer</a> • Built with HTML, CSS &amp; JavaScript</p>
     </footer>
   </div>
 
+  <!-- Leaflet map library (CDN) — needed only for the rain radar. -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
