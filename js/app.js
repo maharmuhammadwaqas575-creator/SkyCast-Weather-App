@@ -2,9 +2,13 @@
    API: Open-Meteo (free, no API key needed)
    - Geocoding: https://geocoding-api.open-meteo.com/v1/search?name={city}
    - Forecast : https://api.open-meteo.com/v1/forecast?latitude=..&longitude=..
-     (current weather + 7-day daily forecast in ONE call)
+     (current weather + hourly + 7-day daily forecast in ONE call)
+   - Air quality: https://air-quality-api.open-meteo.com/v1/air-quality
+     (US AQI + PM2.5, free, no key — section hides if it fails)
+   - Rain radar: Leaflet (CDN) + RainViewer tiles (free, no key)
    - Fallback geocoding: OpenStreetMap Nominatim (if Open-Meteo geocoding is unreachable)
    - Reverse geocoding (auto-location): Nominatim reverse
+   - Moon phase: computed in JS from the date (no API needed)
 
    Auto-location: on load the app asks the browser for the device location.
    If it is denied, unavailable or times out, Lahore is loaded instead.
@@ -29,6 +33,33 @@ const celsiusBtn     = document.getElementById("celsiusBtn");
 const fahrenheitBtn  = document.getElementById("fahrenheitBtn");
 const forecastSection = document.getElementById("forecastSection");
 const weekView       = document.getElementById("weekView");
+const langBtn        = document.getElementById("langBtn");
+const favBtn         = document.getElementById("favBtn");
+const favSection     = document.getElementById("favSection");
+const favList        = document.getElementById("favList");
+const hourlySection  = document.getElementById("hourlySection");
+const hourlyStrip    = document.getElementById("hourlyStrip");
+const extraSection   = document.getElementById("extraSection");
+const graphSection   = document.getElementById("graphSection");
+const tempChartEl    = document.getElementById("tempChart");
+const radarSection   = document.getElementById("radarSection");
+const feelsLikeBigEl = document.getElementById("feelsLikeBig");
+const windDetailEl   = document.getElementById("windDetail");
+const uvValueEl      = document.getElementById("uvValue");
+const uvLabelTextEl  = document.getElementById("uvLabelText");
+const uvMaxEl        = document.getElementById("uvMax");
+const sunriseEl      = document.getElementById("sunriseTime");
+const sunsetEl       = document.getElementById("sunsetTime");
+const dayLengthEl    = document.getElementById("dayLength");
+const moonIconEl     = document.getElementById("moonIcon");
+const moonEmojiEl    = document.getElementById("moonEmoji");
+const moonNameEl     = document.getElementById("moonName");
+const moonIllumEl    = document.getElementById("moonIllum");
+const aqiCardEl      = document.getElementById("aqiCard");
+const aqiValueEl     = document.getElementById("aqiValue");
+const aqiCategoryEl  = document.getElementById("aqiCategory");
+const aqiPmEl        = document.getElementById("aqiPm");
+const clothingTipEl  = document.getElementById("clothingTip");
 
 // ---------- Constants ----------
 const LAHORE = { name: "Lahore", country: "Pakistan", latitude: 31.558, longitude: 74.35071 };
@@ -39,7 +70,157 @@ let unit = "celsius";          // "celsius" | "fahrenheit"
 let lastCity = null;           // { name, country, latitude, longitude }
 let lastData = null;           // { place, data } — last full forecast, for re-renders
 let recentCities = [];         // recent search names
+let favourites = [];           // pinned cities { name, country, latitude, longitude }
+let lang = "en";               // "en" | "ur" — UI language, saved in localStorage
+try { lang = localStorage.getItem("skycast-lang") || "en"; } catch (e) { /* storage unavailable */ }
 let retryAction = () => handleSearch(); // what the Try again button re-runs
+let radarMap = null;           // Leaflet map (created once, re-centred per city)
+let radarMarker = null;        // marker on the current city
+let lastAQIKey = "";           // "lat,lon" of the last air-quality fetch
+let lastAQITime = 0;           // when it was fetched (skip re-fetch within 10 min)
+
+// ---------- Language dictionary (EN / UR) ----------
+// Only the main UI labels are translated — weather descriptions from the API
+// stay in English. The page layout stays left-to-right so Urdu labels sit
+// neatly inside the same cards; only the words change.
+const I18N = {
+  en: {
+    subtitle: "Live weather for any city in the world",
+    searchPlaceholder: "Enter city name… e.g. Jhang",
+    search: "Search",
+    loading: "Loading…",
+    myLocation: "📍 My location",
+    recentTitle: "Recent searches",
+    favTitle: "Favourite cities",
+    hourlyTitle: "Next 24 hours",
+    forecastTitle: "7-day forecast",
+    extraTitle: "Today's details",
+    graphTitle: "7-day temperature graph",
+    radarTitle: "Rain radar",
+    radarNote: "Live rain radar • RainViewer",
+    feelsLike: "Feels like",
+    humidity: "Humidity",
+    windLabel: "Wind speed",
+    pressure: "Pressure",
+    rainNow: "Rain now",
+    uvLabel: "UV index",
+    sunLabel: "Sunrise & sunset",
+    moonLabel: "Moon phase",
+    aqiLabel: "Air quality",
+    clothingLabel: "What to wear",
+    dayLength: "Day length",
+    maxToday: "Max today",
+    legendMax: "Daily high",
+    legendMin: "Daily low",
+    fetching: "Fetching weather…",
+    day: "☀️ Daytime",
+    night: "🌙 Nighttime",
+    today: "Today",
+    now: "Now",
+    gusts: "Gusts",
+    uv_low: "Low", uv_moderate: "Moderate", uv_high: "High", uv_veryhigh: "Very High", uv_extreme: "Extreme",
+    uv_tip_low: "No protection needed",
+    uv_tip_moderate: "Wear sunscreen",
+    uv_tip_high: "Sunscreen + hat",
+    uv_tip_veryhigh: "Avoid midday sun",
+    uv_tip_extreme: "Stay indoors at midday",
+    aqi_good: "Good", aqi_moderate: "Moderate", aqi_usg: "Unhealthy for sensitive groups",
+    aqi_unhealthy: "Unhealthy", aqi_veryunhealthy: "Very unhealthy", aqi_hazardous: "Hazardous",
+    moon_new: "New Moon", moon_wax_crescent: "Waxing Crescent", moon_first: "First Quarter",
+    moon_wax_gibbous: "Waxing Gibbous", moon_full: "Full Moon", moon_wan_gibbous: "Waning Gibbous",
+    moon_last: "Last Quarter", moon_wan_crescent: "Waning Crescent",
+    lit: "lit",
+    cloth_freezing: "Very cold — heavy jacket and warm clothes 🧥",
+    cloth_cold: "Cold — wear a jacket or sweater 🧥",
+    cloth_mild: "Pleasant — light jacket or full sleeves 👕",
+    cloth_warm: "Warm — a T-shirt is fine 👕",
+    cloth_hot: "Very hot — light clothes and stay cool 😎",
+    cloth_umbrella: "+ take an umbrella, rain is likely ☂️",
+    cloth_sunscreen: "+ wear sunscreen 🧴",
+  },
+  ur: {
+    subtitle: "دنیا کے کسی بھی شہر کا لائیو موسم",
+    searchPlaceholder: "شہر کا نام لکھیں… مثلاً جھنگ",
+    search: "تلاش کریں",
+    loading: "لوڈ ہو رہا ہے…",
+    myLocation: "📍 میری جگہ",
+    recentTitle: "حالیہ تلاشیں",
+    favTitle: "پسندیدہ شہر",
+    hourlyTitle: "اگلے 24 گھنٹے",
+    forecastTitle: "7 دن کی پیش گوئی",
+    extraTitle: "آج کی تفصیل",
+    graphTitle: "7 دن کا درجہ حرارت گراف",
+    radarTitle: "بارش کا ریڈار",
+    radarNote: "لائیو بارش ریڈار • RainViewer",
+    feelsLike: "محسوس ہوتا ہے",
+    humidity: "نمی",
+    windLabel: "ہوا کی رفتار",
+    pressure: "دباؤ",
+    rainNow: "ابھی بارش",
+    uvLabel: "یو وی انڈیکس",
+    sunLabel: "طلوع و غروب آفتاب",
+    moonLabel: "چاند کی حالت",
+    aqiLabel: "ہوا کا معیار",
+    clothingLabel: "کیا پہنیں",
+    dayLength: "دن کی لمبائی",
+    maxToday: "آج زیادہ سے زیادہ",
+    legendMax: "دن کا زیادہ درجہ حرارت",
+    legendMin: "دن کا کم درجہ حرارت",
+    fetching: "موسم لا رہے ہیں…",
+    day: "☀️ دن",
+    night: "🌙 رات",
+    today: "آج",
+    now: "ابھی",
+    gusts: "جھونکے",
+    uv_low: "کم", uv_moderate: "درمیانہ", uv_high: "زیادہ", uv_veryhigh: "بہت زیادہ", uv_extreme: "انتہائی",
+    uv_tip_low: "کوئی حفاظت ضروری نہیں",
+    uv_tip_moderate: "سن سکرین لگائیں",
+    uv_tip_high: "سن سکرین + ٹوپی",
+    uv_tip_veryhigh: "دوپہر کی دھوپ سے بچیں",
+    uv_tip_extreme: "دوپہر کو اندر رہیں",
+    aqi_good: "اچھی", aqi_moderate: "درمیانی", aqi_usg: "حساس افراد کے لیے نقصان دہ",
+    aqi_unhealthy: "نقصان دہ", aqi_veryunhealthy: "بہت نقصان دہ", aqi_hazardous: "خطرناک",
+    moon_new: "نیا چاند", moon_wax_crescent: "بڑھتا ہوا ہلال", moon_first: "پہلی چوتھائی",
+    moon_wax_gibbous: "بڑھتا ہوا چاند", moon_full: "پورا چاند", moon_wan_gibbous: "گھٹتا ہوا چاند",
+    moon_last: "آخری چوتھائی", moon_wan_crescent: "گھٹتا ہوا ہلال",
+    lit: "روشن",
+    cloth_freezing: "بہت سردی — موٹی جیکٹ اور گرم کپڑے پہنیں 🧥",
+    cloth_cold: "سردی ہے — جیکٹ یا سویٹر پہنیں 🧥",
+    cloth_mild: "موسم اچھا ہے — ہلکی جیکٹ یا پوری آستین 👕",
+    cloth_warm: "گرمی ہے — ٹی شرٹ ٹھیک ہے 👕",
+    cloth_hot: "بہت گرمی — ہلکے کپڑے پہنیں اور ٹھنڈے رہیں 😎",
+    cloth_umbrella: "+ چھتری لے لیں، بارش کا امکان ہے ☂️",
+    cloth_sunscreen: "+ سن سکرین لگائیں 🧴",
+  },
+};
+
+// Look a word up in the current language (English if the key is missing).
+function t(key) {
+  const pack = I18N[lang] || I18N.en;
+  if (pack[key] !== undefined) return pack[key];
+  if (I18N.en[key] !== undefined) return I18N.en[key];
+  return key;
+}
+
+// Apply the current language to every [data-i18n] label / placeholder,
+// then re-render the weather so dynamic texts (day/night, tips…) switch too.
+function applyLanguage() {
+  document.querySelectorAll("[data-i18n]").forEach((node) => {
+    node.textContent = t(node.dataset.i18n);
+  });
+  document.querySelectorAll("[data-i18n-placeholder]").forEach((node) => {
+    node.placeholder = t(node.dataset.i18nPlaceholder);
+  });
+  langBtn.textContent = lang === "en" ? "اردو" : "EN";
+  document.documentElement.lang = lang;
+  if (lastData) renderWeather(lastData.place, lastData.data);
+}
+
+function setLang(newLang) {
+  lang = newLang === "ur" ? "ur" : "en";
+  try { localStorage.setItem("skycast-lang", lang); } catch (e) { /* ignore */ }
+  applyLanguage();
+}
 
 // ---------- Small DOM helper ----------
 function el(tag, className, text) {
@@ -268,7 +449,7 @@ function showLoading(show) {
   loadingBox.hidden = !show;
   searchBtn.disabled = show;
   locateBtn.disabled = show;
-  searchBtn.textContent = show ? "Loading…" : "Search";
+  searchBtn.textContent = show ? t("loading") : t("search");
 }
 
 function showError(message, showRetry = false) {
@@ -283,6 +464,10 @@ function showError(message, showRetry = false) {
   errorBox.hidden = false;
   weatherCard.hidden = true;
   forecastSection.hidden = true;
+  hourlySection.hidden = true;
+  extraSection.hidden = true;
+  graphSection.hidden = true;
+  radarSection.hidden = true;
 }
 
 function hideError() {
@@ -375,7 +560,7 @@ function renderWeek(daily) {
   for (let i = 0; i < count; i++) {
     const info = describeWeather(daily.weather_code[i]);
     const card = el("div", "day-card");
-    card.appendChild(el("p", "day-label", i === 0 ? "Today" : weekdayShort(daily.time[i])));
+    card.appendChild(el("p", "day-label", i === 0 ? t("today") : weekdayShort(daily.time[i])));
     const iconEl = el("p", "day-icon");
     iconEl.innerHTML = weatherIconSVG(info.icon);
     card.appendChild(iconEl);
@@ -406,15 +591,23 @@ function renderWeather(place, data) {
   document.getElementById("weatherDesc").textContent = info.text;
   document.getElementById("weatherIcon").innerHTML = weatherIconSVG(info.icon);
   const dayNight = document.getElementById("dayNight");
-  dayNight.textContent = isDay ? "☀️ Daytime" : "🌙 Nighttime";
+  dayNight.textContent = isDay ? t("day") : t("night");
   dayNight.hidden = false;
   document.getElementById("temperature").textContent = formatTemp(current.temperature_2m);
   document.getElementById("tempUnit").textContent = unit === "celsius" ? "°C" : "°F";
+  feelsLikeBigEl.textContent = formatTemp(current.apparent_temperature);
   document.getElementById("feelsLike").textContent = formatTemp(current.apparent_temperature);
   document.getElementById("humidity").textContent =
     current.relative_humidity_2m ?? "—";
   document.getElementById("windSpeed").textContent =
     current.wind_speed_10m ?? "—";
+  // Wind detail: compass direction (e.g. NW) + gusts.
+  const windDir = current.wind_direction_10m;
+  const gusts = current.wind_gusts_10m;
+  windDetailEl.textContent =
+    (windDir === null || windDir === undefined ? "—" : degreesToCompass(windDir)) +
+    " • " + t("gusts") + " " +
+    (gusts === null || gusts === undefined ? "—" : Math.round(gusts) + " km/h");
   document.getElementById("pressure").textContent =
     current.pressure_msl ?? "—";
   document.getElementById("precipitation").textContent =
@@ -430,7 +623,372 @@ function renderWeather(place, data) {
   lastCity = place;
   lastData = { place, data };
   renderForecast();
+  renderHourly(data);
+  renderExtras(place, data);
+  graphSection.hidden = false;
+  drawTempChart(daily);
+  updateRadar(place);
+  updateFavButton();
   weatherCard.hidden = false;
+}
+
+// ---------- New features: compass, moon, UV, AQI, tips, hourly, graph, radar ----------
+
+// Wind degrees (0–360) → 16-point compass direction, e.g. 315 → "NW".
+function degreesToCompass(deg) {
+  const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+  return dirs[Math.round(deg / 22.5) % 16];
+}
+
+// Moon phase from the date — no API needed.
+// The Moon repeats every 29.53 days; we count days since a known new moon
+// (6 Jan 2000, 18:14 UTC) and map the age to one of 8 phases.
+function moonPhase(dateStr) {
+  const newMoon = Date.UTC(2000, 0, 6, 18, 14); // reference new moon
+  const date = new Date(dateStr + "T12:00:00Z").getTime();
+  const age = (((date - newMoon) / 86400000) % 29.53 + 29.53) % 29.53;
+  const illum = Math.round(((1 - Math.cos((2 * Math.PI * age) / 29.53)) / 2) * 100);
+  if (age < 1.84 || age > 27.68) return { key: "moon_new", emoji: "🌑", illum };
+  if (age < 5.53)  return { key: "moon_wax_crescent", emoji: "🌒", illum };
+  if (age < 9.22)  return { key: "moon_first", emoji: "🌓", illum };
+  if (age < 12.91) return { key: "moon_wax_gibbous", emoji: "🌔", illum };
+  if (age < 16.61) return { key: "moon_full", emoji: "🌕", illum };
+  if (age < 20.30) return { key: "moon_wan_gibbous", emoji: "🌖", illum };
+  if (age < 23.99) return { key: "moon_last", emoji: "🌗", illum };
+  return { key: "moon_wan_crescent", emoji: "🌘", illum };
+}
+
+// Seconds of daylight → "10h 24m". Falls back to sunrise − sunset.
+function formatDayLength(seconds, daily) {
+  if (seconds !== null && seconds !== undefined) {
+    return `${Math.floor(seconds / 3600)}h ${Math.round((seconds % 3600) / 60)}m`;
+  }
+  if (daily.sunrise && daily.sunset && daily.sunrise[0] && daily.sunset[0]) {
+    const diff = (new Date(daily.sunset[0]) - new Date(daily.sunrise[0])) / 60000;
+    return `${Math.floor(diff / 60)}h ${Math.round(diff % 60)}m`;
+  }
+  return "—";
+}
+
+// UV index → category + plain advice.
+function uvInfo(uv) {
+  if (uv === null || uv === undefined) return { label: "—", tip: "" };
+  if (uv < 3)  return { label: t("uv_low"),      tip: t("uv_tip_low") };
+  if (uv < 6)  return { label: t("uv_moderate"), tip: t("uv_tip_moderate") };
+  if (uv < 8)  return { label: t("uv_high"),     tip: t("uv_tip_high") };
+  if (uv < 11) return { label: t("uv_veryhigh"), tip: t("uv_tip_veryhigh") };
+  return { label: t("uv_extreme"), tip: t("uv_tip_extreme") };
+}
+
+// US AQI number → category name.
+function aqiCategory(aqi) {
+  if (aqi <= 50)  return t("aqi_good");
+  if (aqi <= 100) return t("aqi_moderate");
+  if (aqi <= 150) return t("aqi_usg");
+  if (aqi <= 200) return t("aqi_unhealthy");
+  if (aqi <= 300) return t("aqi_veryunhealthy");
+  return t("aqi_hazardous");
+}
+
+// Clothing tip — simple rules from feels-like temp, rain chance and UV.
+function clothingTip(feelsC, rainChance, uv) {
+  let key = "cloth_mild";
+  if (feelsC !== null && feelsC !== undefined) {
+    if (feelsC < 5)       key = "cloth_freezing";
+    else if (feelsC < 12) key = "cloth_cold";
+    else if (feelsC < 20) key = "cloth_mild";
+    else if (feelsC < 28) key = "cloth_warm";
+    else                  key = "cloth_hot";
+  }
+  let tip = t(key);
+  if (rainChance !== null && rainChance !== undefined && rainChance >= 50) {
+    tip += " " + t("cloth_umbrella");
+  }
+  if (uv !== null && uv !== undefined && uv >= 6) {
+    tip += " " + t("cloth_sunscreen");
+  }
+  return tip;
+}
+
+// ---------- Hourly forecast (next 24 hours) ----------
+// hourly.time starts at 00:00 today (local time), so we find the first hour
+// that is not in the past and show 24 hours from there.
+function renderHourly(data) {
+  hourlyStrip.innerHTML = "";
+  if (!data.hourly || !data.hourly.time || !data.current) {
+    hourlySection.hidden = true;
+    return;
+  }
+  const startIdx = data.hourly.time.findIndex((time) => time >= data.current.time);
+  const start = startIdx === -1 ? 0 : startIdx;
+  const count = Math.min(24, data.hourly.time.length - start);
+  for (let k = 0; k < count; k++) {
+    const i = start + k;
+    const isDay = data.hourly.is_day ? data.hourly.is_day[i] === 1 : true;
+    const info = describeWeather(data.hourly.weather_code[i], isDay);
+    const card = el("div", "hour-card");
+    card.appendChild(el("p", "hour-label", k === 0 ? t("now") : data.hourly.time[i].slice(11, 16)));
+    const iconEl = el("p", "hour-icon");
+    iconEl.innerHTML = weatherIconSVG(info.icon);
+    card.appendChild(iconEl);
+    card.appendChild(el("p", "hour-temp", formatTemp(data.hourly.temperature_2m[i]) + "°"));
+    const rain = data.hourly.precipitation_probability ? data.hourly.precipitation_probability[i] : null;
+    card.appendChild(el("p", "hour-rain", rain === null || rain === undefined ? "—" : `🌧️ ${rain}%`));
+    hourlyStrip.appendChild(card);
+  }
+  hourlySection.hidden = false;
+}
+
+// ---------- "Today's details": UV, sunrise/sunset, moon, clothing tip ----------
+function renderExtras(place, data) {
+  const daily = data.daily;
+  const current = data.current;
+
+  const uvNow = current.uv_index;
+  const uvMax = daily.uv_index_max ? daily.uv_index_max[0] : null;
+  const uv = (uvNow === null || uvNow === undefined) ? uvMax : uvNow;
+  uvValueEl.textContent = uv === null || uv === undefined ? "—" : uv.toFixed(1);
+  const uvText = uvInfo(uv);
+  uvLabelTextEl.textContent = uvText.tip ? `${uvText.label} — ${uvText.tip}` : uvText.label;
+  uvMaxEl.textContent = uvMax === null || uvMax === undefined ? "—" : uvMax.toFixed(1);
+
+  sunriseEl.textContent = daily.sunrise && daily.sunrise[0] ? daily.sunrise[0].slice(11, 16) : "—";
+  sunsetEl.textContent = daily.sunset && daily.sunset[0] ? daily.sunset[0].slice(11, 16) : "—";
+  dayLengthEl.textContent = formatDayLength(
+    daily.daylight_duration ? daily.daylight_duration[0] : null, daily
+  );
+
+  const phase = moonPhase(current.time.slice(0, 10));
+  moonIconEl.textContent = phase.emoji;
+  moonEmojiEl.textContent = phase.emoji;
+  moonNameEl.textContent = t(phase.key);
+  moonIllumEl.textContent = `${phase.illum}% ${t("lit")}`;
+
+  const rainChance = daily.precipitation_probability_max ? daily.precipitation_probability_max[0] : null;
+  clothingTipEl.textContent = clothingTip(current.apparent_temperature, rainChance, uv);
+
+  extraSection.hidden = false;
+}
+
+// ---------- Air quality (Open-Meteo air-quality API — free, no key) ----------
+// Fetched separately from the forecast; if it fails, the AQI card just hides.
+async function fetchAQI(place) {
+  const key = `${place.latitude.toFixed(2)},${place.longitude.toFixed(2)}`;
+  if (key === lastAQIKey && Date.now() - lastAQITime < 10 * 60 * 1000) return;
+  lastAQIKey = key;
+  lastAQITime = Date.now();
+  const url = `https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${place.latitude}&longitude=${place.longitude}&hourly=us_aqi,pm2_5&timezone=auto`;
+  try {
+    const data = await fetchJson(url, 2);
+    if (!data.hourly || !data.hourly.time) throw new Error("no-aqi");
+    const now = lastData && lastData.data.current ? lastData.data.current.time : "";
+    const idx = data.hourly.time.findIndex((time) => time >= now);
+    const i = idx === -1 ? data.hourly.time.length - 1 : idx;
+    const aqi = data.hourly.us_aqi[i];
+    const pm = data.hourly.pm2_5[i];
+    if (aqi === null || aqi === undefined) throw new Error("no-aqi");
+    aqiValueEl.textContent = Math.round(aqi);
+    aqiCategoryEl.textContent = aqiCategory(aqi);
+    aqiPmEl.textContent = pm === null || pm === undefined ? "—" : `PM2.5 ${pm} µg/m³`;
+    aqiCardEl.hidden = false;
+  } catch (e) {
+    aqiCardEl.hidden = true; // fail gracefully — the rest of the app is unaffected
+  }
+}
+
+// ---------- Temperature graph (plain <canvas>, no chart library) ----------
+// Two lines: daily highs (yellow) and daily lows (light blue), with day labels.
+function drawTempChart(daily) {
+  const canvas = tempChartEl;
+  if (!canvas || !daily || !daily.time) return;
+  const ctx = canvas.getContext("2d");
+  const dpr = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth || 640;
+  const height = 180;
+  canvas.width = Math.round(width * dpr);
+  canvas.height = Math.round(height * dpr);
+  canvas.style.height = height + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, width, height);
+
+  const days = Math.min(7, daily.time.length);
+  const toDisplay = (c) => (unit === "celsius" ? c : toFahrenheit(c));
+  const maxes = [], mins = [];
+  for (let i = 0; i < days; i++) {
+    maxes.push(toDisplay(daily.temperature_2m_max[i]));
+    mins.push(toDisplay(daily.temperature_2m_min[i]));
+  }
+  let lo = Math.min(...mins);
+  let hi = Math.max(...maxes);
+  if (hi - lo < 5) { hi += 2; lo -= 2; } // keep the lines apart on flat weeks
+
+  const padL = 34, padR = 12, padT = 18, padB = 30;
+  const x = (i) => padL + (i * (width - padL - padR)) / Math.max(1, days - 1);
+  const y = (v) => padT + ((hi - v) * (height - padT - padB)) / (hi - lo);
+
+  // Horizontal grid lines + temperature labels.
+  ctx.strokeStyle = "rgba(255,255,255,0.18)";
+  ctx.fillStyle = "rgba(255,255,255,0.75)";
+  ctx.font = "11px sans-serif";
+  ctx.textAlign = "right";
+  for (let s = 0; s <= 3; s++) {
+    const v = lo + ((hi - lo) * s) / 3;
+    const yy = y(v);
+    ctx.beginPath(); ctx.moveTo(padL, yy); ctx.lineTo(width - padR, yy); ctx.stroke();
+    ctx.fillText(Math.round(v) + "°", padL - 6, yy + 4);
+  }
+
+  // One line with dots and value labels (labels above the line for highs,
+  // below the line for lows, so they never overlap).
+  function drawLine(values, colour, labelAbove) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    values.forEach((v, i) => { if (i === 0) ctx.moveTo(x(i), y(v)); else ctx.lineTo(x(i), y(v)); });
+    ctx.stroke();
+    values.forEach((v, i) => {
+      ctx.fillStyle = colour;
+      ctx.beginPath(); ctx.arc(x(i), y(v), 3.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.textAlign = "center";
+      ctx.fillText(Math.round(v) + "°", x(i), y(v) + (labelAbove ? -8 : 15));
+    });
+  }
+  drawLine(maxes, "#FFD166", true);
+  drawLine(mins, "#7DD3FC", false);
+
+  // Day labels along the bottom.
+  ctx.fillStyle = "rgba(255,255,255,0.85)";
+  ctx.textAlign = "center";
+  for (let i = 0; i < days; i++) {
+    ctx.fillText(i === 0 ? t("today") : weekdayShort(daily.time[i]), x(i), height - 6);
+  }
+}
+
+// ---------- Rain radar (Leaflet + free RainViewer tiles) ----------
+// If Leaflet failed to load (offline / CDN blocked) the section stays hidden.
+async function updateRadar(place) {
+  if (typeof L === "undefined") {
+    radarSection.hidden = true;
+    return;
+  }
+  radarSection.hidden = false;
+  try {
+    if (!radarMap) {
+      radarMap = L.map("radarMap").setView([place.latitude, place.longitude], 9);
+      // Base map from Esri World Street Map (free, no key) — NOT
+      // tile.openstreetmap.org (its volunteer servers 403-block apps) and
+      // NOT CARTO basemaps (they now need an API key — without one they
+      // only serve a 2 KB "API KEY REQUIRED" watermark tile, even with a
+      // 200 status). Esri serves real map tiles with no key.
+      // NOTE the order: Esri wants tile/{z}/{y}/{x}, not {z}/{x}/{y}.
+      L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}", {
+        maxZoom: 18,
+        attribution: 'Tiles &copy; Esri &mdash; Source: Esri, DeLorme, NAVTEQ, USGS, Intermap, iPC, NRCAN, Esri Japan, METI, Esri China (Hong Kong), Esri (Thailand), TomTom, 2012',
+      }).addTo(radarMap);
+      // Ask RainViewer for the newest radar frame, then add its tiles.
+      // NOTE: RainViewer gives each frame a "path" (like "/v2/radar/5efb0bcc11ee").
+      // The old timestamp-style URL no longer works (410 Gone), so the path must be used.
+      const rv = await fetchJson("https://api.rainviewer.com/public/weather-maps.json", 2);
+      const past = rv && rv.radar && rv.radar.past;
+      const frame = past && past.length ? past[past.length - 1] : null;
+      if (frame && frame.path) {
+        L.tileLayer(`https://tilecache.rainviewer.com${frame.path}/256/{z}/{x}/{y}/2/1_1.png`, {
+          opacity: 0.7,
+          attribution: 'Radar &copy; <a href="https://www.rainviewer.com">RainViewer</a>',
+        }).addTo(radarMap);
+      }
+      radarMarker = L.marker([place.latitude, place.longitude]).addTo(radarMap);
+    } else {
+      radarMap.setView([place.latitude, place.longitude], 9);
+      if (radarMarker) radarMarker.setLatLng([place.latitude, place.longitude]);
+    }
+    // The map was hidden until now — tell Leaflet to re-measure its box.
+    setTimeout(() => { if (radarMap) radarMap.invalidateSize(); }, 100);
+  } catch (e) {
+    radarSection.hidden = true; // radar is a bonus — never break the app
+  }
+}
+
+// ---------- Favourite cities (localStorage) ----------
+function loadFavourites() {
+  try {
+    const saved = JSON.parse(localStorage.getItem("skycast-favourites") || "[]");
+    if (Array.isArray(saved)) favourites = saved;
+  } catch (e) {
+    favourites = [];
+  }
+  renderFavourites();
+}
+
+function saveFavourites() {
+  try { localStorage.setItem("skycast-favourites", JSON.stringify(favourites)); } catch (e) { /* ignore */ }
+}
+
+function isFavourite(place) {
+  return favourites.some((f) =>
+    Math.abs(f.latitude - place.latitude) < 0.01 &&
+    Math.abs(f.longitude - place.longitude) < 0.01
+  );
+}
+
+function updateFavButton() {
+  if (!lastCity) { favBtn.textContent = "☆"; favBtn.classList.remove("active"); return; }
+  const fav = isFavourite(lastCity);
+  favBtn.textContent = fav ? "⭐" : "☆";
+  favBtn.classList.toggle("active", fav);
+}
+
+function toggleFavourite() {
+  if (!lastCity) return;
+  if (isFavourite(lastCity)) {
+    favourites = favourites.filter((f) =>
+      !(Math.abs(f.latitude - lastCity.latitude) < 0.01 &&
+        Math.abs(f.longitude - lastCity.longitude) < 0.01)
+    );
+  } else {
+    favourites.unshift({
+      name: lastCity.name,
+      country: lastCity.country,
+      latitude: lastCity.latitude,
+      longitude: lastCity.longitude,
+    });
+  }
+  saveFavourites();
+  renderFavourites();
+  updateFavButton();
+}
+
+function renderFavourites() {
+  favList.innerHTML = "";
+  favSection.hidden = favourites.length === 0;
+  for (const fav of favourites) {
+    const li = document.createElement("li");
+    li.className = "fav-chip";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "fav-load";
+    btn.textContent = "⭐ " + fav.name;
+    btn.addEventListener("click", () => {
+      cityInput.value = fav.name;
+      hideLocationNote();
+      loadPlaceWeather(fav, { saveRecent: true });
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "fav-remove";
+    remove.textContent = "✕";
+    remove.setAttribute("aria-label", "Remove " + fav.name + " from favourites");
+    remove.addEventListener("click", () => {
+      favourites = favourites.filter((f) => f !== fav);
+      saveFavourites();
+      renderFavourites();
+      updateFavButton();
+    });
+    li.appendChild(btn);
+    li.appendChild(remove);
+    favList.appendChild(li);
+  }
 }
 
 // ---------- API calls (fetch + async/await + try/catch) ----------
@@ -483,13 +1041,14 @@ async function findCity(query) {
   }
 }
 
-// One call: current weather + 7-day daily forecast (rain chance included).
+// One call: current weather + hourly + 7-day daily forecast (rain chance included).
 async function fetchForecast(latitude, longitude) {
   const params = new URLSearchParams({
     latitude: latitude,
     longitude: longitude,
-    current: "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,pressure_msl,wind_speed_10m,precipitation,is_day",
-    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset",
+    current: "temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,pressure_msl,wind_speed_10m,wind_direction_10m,wind_gusts_10m,precipitation,uv_index,is_day",
+    hourly: "temperature_2m,weather_code,precipitation_probability,is_day",
+    daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,sunrise,sunset,daylight_duration,uv_index_max,wind_speed_10m_max,wind_gusts_10m_max,wind_direction_10m_dominant",
     forecast_days: String(FORECAST_DAYS),
     timezone: "auto",
   });
@@ -539,6 +1098,7 @@ async function loadPlaceWeather(place, options = {}) {
   try {
     const data = await fetchForecast(place.latitude, place.longitude);
     renderWeather(place, data);
+    fetchAQI(place); // separate call — never blocks the weather itself
     if (options.saveRecent) saveRecentCity(place.name);
   } finally {
     showLoading(false);
@@ -643,8 +1203,19 @@ locateBtn.addEventListener("click", () => {
 celsiusBtn.addEventListener("click", () => setUnit("celsius"));
 fahrenheitBtn.addEventListener("click", () => setUnit("fahrenheit"));
 
+langBtn.addEventListener("click", () => setLang(lang === "en" ? "ur" : "en"));
+
+favBtn.addEventListener("click", toggleFavourite);
+
+// Redraw the temperature graph when the window size changes.
+window.addEventListener("resize", () => {
+  if (lastData && lastData.data.daily) drawTempChart(lastData.data.daily);
+});
+
 // ---------- Init ----------
 loadRecent();
+loadFavourites();
+applyLanguage();
 
 // Demo helpers (documented in README — handy for the live demonstration):
 //   #demo=CityName  → auto-searches that city on load (real API flow)
